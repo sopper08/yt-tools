@@ -14,7 +14,10 @@ read -p "Please enter the cc subtitle language code you want to download: " cc_l
 youtube-dl --write-sub --sub-lang "$cc_lang" --skip-download "$youtube_link" > /dev/null 2>&1
 
 # 3. Find all vtt files in the directory
-vtt_files=($(ls *.vtt))
+while IFS= read -r -d '' file; do
+    vtt_files+=("$file")
+done < <(find . -maxdepth 1 -name '*.vtt' -print0)
+
 num_files=${#vtt_files[@]}
 
 # 4. Decide the next steps based on the number of vtt files
@@ -29,8 +32,9 @@ else
     read -p "Please choose the file number to convert: " file_choice
     vtt_file="${vtt_files[$((file_choice-1))]}"
 fi
-ffmpeg -i $vtt_file tmp.srt > /dev/null 2>&1
-rm -f $vtt_file
+mv "$vtt_file" tmp.vtt
+ffmpeg -i tmp.vtt tmp.srt
+rm -f tmp.vtt
 
 # Convert the chosen srt file to txt
 srt2text tmp.srt > tmp.txt
