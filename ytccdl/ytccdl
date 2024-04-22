@@ -1,0 +1,65 @@
+#!/usr/bin/env python3
+
+import yt_dlp
+import json
+import inquirer
+import requests
+import pangu
+import opencc
+
+def main():
+    # Step 1: Get the URL of the video
+    questions = [
+        inquirer.Text('url', message="Enter the URL of the video you want to download"),
+    ]
+    answers = inquirer.prompt(questions)
+    url = answers['url']
+
+    # Step 2: Get the title of the video and the available subtitles
+    with yt_dlp.YoutubeDL() as ydl:
+        info = ydl.extract_info(url, download=False, process=False)
+
+    # Step 3: Confirm the video
+    video_title = info.get('title', None)
+    print(f"Title: {video_title}")
+    questions = [
+        inquirer.Confirm('confirm', message=f"Is this the video you want to download?", default=True),
+    ]
+    answers = inquirer.prompt(questions)
+    if not answers['confirm']:
+        return
+
+    # Step 4: Select the subtitles
+    subtitles_info = info.get('subtitles', None)
+    subtitles = subtitles_info.keys() if subtitles_info else None
+    questions = [
+        inquirer.List('subtitles', message="Select the subtitles you want to download", choices=subtitles)
+    ]
+    answers = inquirer.prompt(questions)
+    selected_subtitle = answers['subtitles']
+
+    supported_formats = [subtitle_info['ext'] for subtitle_info in subtitles_info[selected_subtitle]]
+    if 'json3' not in supported_formats:
+        print(f"Subtitles in {selected_subtitle} are not available in json3 format")
+        return
+    subtitle_url = [subtitle_info['url'] for subtitle_info in subtitles_info[selected_subtitle] if subtitle_info['ext'] == 'json3'][0]
+    
+    # Step 5: Extract the subtitles
+    with requests.get(subtitle_url) as response:
+        subtitle_json = response.json()
+    subtible_text_list = []
+    for subtitle_event in subtitle_json['events']:
+        for subtitle_seg in subtitle_event['segs']:
+            subtible_text_list.append(subtitle_seg['utf8'])
+
+    subtitle_text = "，".join(subtible_text_list)
+    if selected_subtitle == 'zh-Hans':
+        converter = opencc.OpenCC('s2t.json')
+        subtitle_text = converter.convert(subtitle_text)
+    subtitle_text = pangu.spacing_text(subtitle_text)
+
+    # Step 6: Show the subtitle
+    print(subtitle_text)
+
+if __name__ == "__main__":
+    main()
